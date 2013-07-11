@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>example4 code</title>
+    <!-- Socket.IOサーバーを実装すると (host)/socket.io/socket.io.js でクライアント用のスクリプトが取得できるようになります-->
+    <script src="http://localhost:9000/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <input type="button" id="btnConnect" value="接続" style="display:block"/>
+    <video id="selfView" width="400" height="300" autoplay></video>
+    <video id="remoteView" width="400" height="300" autoplay></video>
+    <script>
+        // このサンプルはW3CのWebRTCドラフト仕様(Latest editor's draft)の10. Examples and Call Flowsにかかれてある
+        // http://dev.w3.org/2011/webrtc/editor/webrtc.html#examples-and-call-flows
+        // EXAMPLE 4 のコードを元に作成しました。
+        //
+        // このサンプルは、Chrome同士またはFirefox同士での接続ができます。
+        // ChromeとFirefoxという違うブラウザー同士での接続も技術的には可能なのですが、
+        // 私の知識不足でどのように実装すればいいのかまだわかっていません。
+        // 
+        // 説明コメントでの呼称説明
+        // 呼び出し元(電話をかける人)をAとし、呼び出し先(電話を受ける人)をBとします。
+        // RTCPeerConnectionの事をPCと略します。
+
+        navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+        window.RTCPeerConnection = window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
+        window.RTCSessionDescription = window.mozRTCSessionDescription || window.RTCSessionDescription;
+        window.RTCIceCandidate = window.mozRTCIceCandidate || window.RTCIceCandidate;
+
+        var selfView = document.getElementById('selfView');
+        var remoteView = document.getElementById('remoteView');
+
+        var btnConnect = document.getElementById('btnConnect');
+        btnConnect.disabled = true;
+        btnConnect.addEventListener('click', function () {
+            // AのRTCPeerConnection(以降、PCと略します)インスタンスを作成し、OfferをBに送信する
+            start(true);
+        });
+
+        // signalingChannelは、テキストデータをリアルタイムに送受信できる通信手段(CometやWebSocketなど)であればOKで、
+        // 今回はSocket.IO(WebSocket)を使用してます。
+        var signalingChannel = io.connect('http://localhost:9000/');
+
+        // P2P接続でNAT越えを行うためSTUNサーバーおよび(必要な場合)TURNサーバーのアドレスを設定します。
+        // stunサーバーは公開されているのでそれを使用します。
+        // 他のサンプルではstunサーバーはChromeとFirefoxとでは違うSTUNサーバーが設定されています。
+        // (なぜ別のサーバーを使用するのかはわかりません。私もこの辺知りたいところです)
+        // Firefoxの場合＞ "stun:23.21.150.121"
+        var configuration = { "iceServers": [{ "url": "stun:stun.l.google.com:19302" }/*, {"url":"turn:---"}*/] };
+        
+        var pc = null;
+
+        // Socket.IOはイベント名を指定してメッセージの送受信ができます。
+        signalingChannel.on('connect', function () {
+            signalingChannel.emit('login');
+        });
+
+        signalingChannel.on('login', function () {
+            // 相手が接続したら、接続ボタンを有効にする。
+            btnConnect.disabled = false;
+        });
+
+        function start(isCaller) {
+            // NAT配下同士の接続の場合は、NAT越えする必要がないため引数にnullを指定しても問題ありませんが
+            // ChromeとFirefoxではnullを指定した場合の挙動が少々違うようです。
+            // Chromeの場合、STUNサーバーの接続は省略され、
+            // Firefoxの場合、nullを指定するとデフォルトで設定されているサーバーを使用します。
+            // (about:config で media.peerconnection.default_iceserversの項目)
+            // pc = new RTCPeerConnection(null);
+            // またFirefoxの場合はDtlsSrtpKeyAgreementをtrueにしないと接続出来ませんでした。
+            // 逆に、Chromeでこのオプションを設定するとうまく接続出来ませんでした。
+            if (navigator.mozGetUserMedia) {
+                pc = new RTCPeerConnection(configuration, { "optional":[{ "DtlsSrtpKeyAgreement": true }] });
+            } else {
+                pc = new RTCPeerConnection(configuration);
+            }
+
+            // send any ice candidates to the other peer
+            pc.onicecandidate = function (evt) {
+                // icecandidateイベントは接続候補が更新されるたびに発生します(なので複数回発生します)。
+                // このイベントが発生するたびに接続候補を相手に教えなければなりません。
+                // また、Socket.IOはオブジェクトの送受信に対応しているためJSON.stringifyは不要です。
+                // (ライブラリ内部でJSONに変換して送信。逆も同様に受信後JSONからオブジェクトに変換してコールバックに渡してくれる)
+                // なのでcandidateをそのまま送信。
+                if(evt.candidate)
+                    signalingChannel.emit('ice', evt.candidate);
+            };
+
+            // let the "negotiationneeded" event trigger offer generation
+            pc.onnegotiationneeded = function () {
+                pc.createOffer(localDescCreated, logError);
+            }
+
+            // once remote stream arrives, show it in the remote video element
+            pc.onaddstream = function (evt) {
+                remoteView.src = URL.createObjectURL(evt.stream);
+            };
+
+            // get the local stream, show it in the local video element and send it
+            navigator.getUserMedia({ "audio": false, "video": true }, function (stream) {
+                // 映像及び音声のストリームをvideoエレメント及びPCに設定します。
+                selfView.src = URL.createObjectURL(stream);
+                pc.addStream(stream);
+                if(isCaller && navigator.mozGetUserMedia)
+                    pc.createOffer(localDescCreated, logError);
+            }, function (e) {
+                console.log(e);
+            });
+        }
+
+        // Socket.IOはイベント名を指定することができるので'sdp'と'ice'に分けてます。
+        signalingChannel.on('sdp', function (sdp) {
+            if (!pc) {
+                // Bのみ
+                // Bの場合、まだRTCPeerConnectionインスタンスを作成していないため、ここで作成。
+                start(false);
+            }
+
+            // A/B共通 
+            // 送られてきた相手のsdpデータを元にRTCSessionDescriptionを作成し、RemoteDescriptionとしてPCに登録
+            //pc.setRemoteDescription(new RTCSessionDescription(sdp))
+            pc.setRemoteDescription(new RTCSessionDescription(sdp), function () {
+                // if we received an offer, we need to answer
+                if (pc.remoteDescription.type == "offer")
+                    // 
+                    pc.createAnswer(localDescCreated, logError);
+            }, logError);
+        });
+
+        signalingChannel.on('ice', function (candidate) {
+            if (pc) {
+                // 送られてきた相手の接続候補情報をPCに追加
+                pc.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+        });
+
+        function localDescCreated(desc) {
+            pc.setLocalDescription(desc, function () {
+                signalingChannel.emit('sdp', pc.localDescription);
+            }, logError);
+        }
+
+        function logError(error) {
+            log(error.name + ": " + error.message);
+        }
+    </script>
+</body>
+</html>
