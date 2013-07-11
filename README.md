@@ -17,3 +17,17 @@ WebRTCはSDPなどを相手に送るための手段が(現在の仕様におい�
 5. もう一方のタブ(ウインドウ)でもアクセス許可を求めますので許可します。
 
 以上の手順を行うと、ビデオチャットができるようになっていると思います。
+
+
+
+多対多の場合の実装方法
+----------------------
+
+多対多の接続を行う場合は、各ピアごとにRTCPeerConnectionのインスタンスを相手の人数分作成して接続するという実装となります。
+
+A、B、Cの３人で接続を行う場合
+A：Bと接続を行うためのRTCPeerConnectionとCと接続を行うためのRTCPeerConnection
+B：Aと接続を行うためのRTCPeerConnectionとCと接続を行うためのRTCPeerConnection
+C：Aと接続を行うためのRTCPeerConnectionとBと接続を行うためのRTCPeerConnection
+
+なので、このへんはユーザーIDを発行してユーザー識別が行えるようにする必要があります。
