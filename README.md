@@ -7,8 +7,8 @@ WebRTCはSDPなどを相手に送るための手段が(現在の仕様におい�
 ですので、Node.js及びSocket.IOがインストールされている必要があります。
 
 
-WebRTCで使用されるAPI(オブジェクト)の説明
--------------------------------------
+### WebRTCで使用されるAPI(オブジェクト)の説明
+
 * RTCPeerConnection  
   P2P接続を行うためのオブジェクト  
 * getUserMedia  
@@ -16,8 +16,7 @@ WebRTCで使用されるAPI(オブジェクト)の説明
   また、現在Chromeしか実装されていませんが、デスクトップ画面やブラウザーのタブの映像ストリームも取得することができます。
 
 
-実行手順
-------------
+### 実行手順
 
 1. Node.jsでsimpleSampleServer.jsを起動します。
 2. simpleSample.htmlをChrome同士またはFirefox同士２つのタブ(ウインドウ)で開きます。
@@ -29,14 +28,18 @@ WebRTCで使用されるAPI(オブジェクト)の説明
 
 
 
-多対多の場合の実装方法
-----------------------
+### 1対多や多対多の場合の実装方法
 
-多対多の接続を行う場合は、各ピアごとにRTCPeerConnectionのインスタンスを相手の人数分作成して接続するという実装となります。
+1対多や多対多の接続を行う場合は、各ピアごとにRTCPeerConnectionのインスタンスを相手の人数分作成して接続するという実装となります。
 
-A、B、Cの３人で接続を行う場合
-A：Bと接続を行うためのRTCPeerConnectionとCと接続を行うためのRTCPeerConnection
-B：Aと接続を行うためのRTCPeerConnectionとCと接続を行うためのRTCPeerConnection
-C：Aと接続を行うためのRTCPeerConnectionとBと接続を行うためのRTCPeerConnection
+* A、B、Cの３人でAに対してBとCが1対多接続を行う場合  
+A：Bと接続を行うためのRTCPeerConnectionとCと接続を行うためのRTCPeerConnection  
+B：Aと接続を行うためのRTCPeerConnection  
+C：Aと接続を行うためのRTCPeerConnection    
+
+* A、B、Cの３人で多対多接続を行う場合  
+A：Bと接続を行うためのRTCPeerConnectionとCと接続を行うためのRTCPeerConnection  
+B：Aと接続を行うためのRTCPeerConnectionとCと接続を行うためのRTCPeerConnection  
+C：Aと接続を行うためのRTCPeerConnectionとBと接続を行うためのRTCPeerConnection  
 
 なので、このへんはユーザーIDを発行してユーザー識別が行えるようにする必要があります。
